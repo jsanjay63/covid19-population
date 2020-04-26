@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Covid 19 Analysis w.r.t Population</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.3.3/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 0px;
+            border: 0px;
+            padding: 0px;
+        }
+        .container {
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            position: absolute;
+        }
+        .header {
+            position: absolute;
+            top: -8px;
+            left: 0px;
+            padding-left: 50px;
+            right: 0;
+            padding: 10px;
+            z-index: 1000;
+            background-color: rgba(255,255,255,0.75);
+        }
+        h2 {
+            margin: 10px 0;
+            margin-left: 50px;
+        }
+        h3 {
+            margin: 0;
+        }
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+
+        #property-list, #playback {
+            display: inline-block;
+        }
+
+        .view {
+            display: inline-block;
+            font-size: 12px;
+            border: 1px solid black;
+            border-radius: 3px;
+            margin: 3px;
+            padding: 4px;
+            background: #ffab96;
+        }
+
+        .view:hover {
+            background: dodgerblue;
+            color: white;
+            margin-top: -2px;
+            box-shadow: 1px 1px 1px black;
+        }
+
+        .view:active {
+            margin-top: -2px;
+        }
+
+        #playback {
+            margin-right: 1em;
+            margin-left: 1em;
+        }
+
+        #playback .view {
+            background-color: #ab96ff;
+        }
+
+        .view.selected {
+            background: white;
+            color: black;
+        }
+
+        #datepicker {
+            margin-left: 50px;
+            font-size: 12px;
+        }
+
+        .flatpickr-minute {
+            pointer-events: none;
+        }
+
+        .flatpickr-minute + .arrowUp {
+            pointer-events: none;
+        }
+
+        .flatpickr-minute + .arrowUp + .arrowDown {
+            pointer-events: none;
+        }
+
+        .numInputWrapper:nth-child(3):hover {
+            background: none;
+        }
+
+        .numInputWrapper:nth-child(3):hover .arrowUp {
+            display: none;
+        }
+
+        .numInputWrapper:nth-child(3):hover .arrowDown {
+            display: none;
+        }
+
+
+    </style>
+  </head>
+
+  <body>
+    <div class="header">
+        <h2>Covid 19 Analysis w.r.t Population</h2>
+        <input id="datepicker" class="flatpickr flatpickr-input" type="text" placeholder="Select Date..." readonly="readonly">
+        <div id="playback">
+            <div id="back" class="view" onclick="addDay(-1)">&lt;</div>
+            <div id="play" class="view" onclick="play()">Play</div>
+            <div id="next" class="view" onclick="addDay(1)">&gt;</div>
+        </div>
+        <div id="property-list"></div>
+    </div>
+    <div class="container">
+        <div id="map"></div>
+    </div>
+
+    <!-- leaflet -->
+    <script src="https://unpkg.com/leaflet@1.3.3/dist/leaflet.js"></script>
+
+    <!-- D3 -->
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+
+    <!-- Demo setup -->
+    <script>
+        var circles = [];
+        var initDate = '2020-01-22';
+        var timeFormatter = d3.timeFormat('%Y-%m-%d');
+        var numberFormatter = d3.format(",");
+        var currentDate = new Date();
+        var month = currentDate.getMonth();
+        var day = currentDate.getDate()-2;
+        var year = currentDate.getFullYear();
+        var today = new Date(year, month, day);
+        var calendar = flatpickr("#datepicker", {
+            enableTime: true,
+            dateFormat: "Y-m-d",
+            minDate: "2020-01-22",
+            maxDate: today,
+            onChange: function(selectedDates, dateStr, instance) {
+                fetchData(timeFormatter(selectedDates[0]))
+            }
+        });
+
+
+        var properties = [
+            { code: 'Confirmed', desc: 'Confirmed Cases' },
+            { code: 'Recovered', desc: 'Recovered Cases' },
+            { code: 'Deaths', desc: 'Death Cases' },
+            { code: 'Confirmed_Population_Ratio', desc: 'Ratio of Confirmed cases to Population' },
+            { code: 'Recovered_Population_Ratio', desc: 'Ratio of Recovered cases to Population' },
+            { code: 'Deaths_Population_Ratio', desc: 'Ratio of Death cases to Population' }
+        ];
+        var currProperty = 'Confirmed';
+
+        function renderProperties(dateStr) {
+            var pp = d3.select('#property-list').selectAll('.view').data(properties);
+            pp.enter()
+                .append('div')
+                .classed('view', true)
+                .on('click', d => {
+                    currProperty = d.code;
+                    renderProperties(dateStr);
+                    //renderCircles(dateStr);
+                    fetchData(timeFormatter(calendar.selectedDates[0]))
+                })
+                .attr('title', d => d.desc)
+                .text(d => d.code)
+                .merge(pp)
+                .classed('selected', d => d.code === currProperty);
+        }
+
+        function addDay(n) {
+            var selectedDate = calendar.selectedDates[0];
+            if(selectedDate >= today) {
+                console.log("done")
+                play()
+            } else {
+                selectedDate.setDate(selectedDate.getDate() + n);
+                calendar.setDate(selectedDate, true);
+            }
+        }
+
+        var playTimer;
+
+        function play() {
+            if (playTimer) {
+                window.clearInterval(playTimer);
+                playTimer = 0;
+                document.getElementById("play").innerHTML = "Play";
+            } else {
+                playTimer = window.setInterval(function() { addDay(1) }, 1000);
+                document.getElementById("play").innerHTML = "Pause";
+            }
+        }
+
+        var theMap = L.map('map', {maxZoom: 14});
+        theMap.attributionControl.addAttribution('Covid 19 cases data via <a href="https://jsanjay63.github.io/covid19-geoextractor/output/covid19_time_series.geojson">GeoExtractor</a>');
+        theMap.attributionControl.addAttribution('Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Map data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://www.openstreetmap.org/copyright">ODbL</a>');
+
+        L.tileLayer('http://tile.stamen.com/terrain/{z}/{x}/{y}.png').addTo(theMap);
+        // center of map
+        theMap.setView([27.416232, 10.703637], 3);
+
+        var spaceID = 'MwLCOnqT';
+        var accessToken = 'AE0cwyBTRr2GmTYJ8g43jwA';
+        var radiusScale = d3.scaleLinear().domain([0, 300000]).range([7, 70]).clamp(true);
+        var colorScale = d3.scaleSequential(d3.interpolateOrRd).domain([0, 300000]);
+        function renderCircles(dateStr) {
+            // remove old markers
+            circles.forEach(function (c) { c.remove(); })
+            circles = [];
+
+            theData.features.forEach(function (feature) {
+                if(!feature.properties["approx_population"]) {
+                    return;
+                }
+                latitude = feature.geometry.coordinates[1]
+                longitude = feature.geometry.coordinates[0]
+                var value = feature.properties["dates"][dateStr][currProperty.toLowerCase()]
+                if(value < 1) {
+                    value = value * Math.pow(10, 8)
+                }
+                var c = L.circleMarker(
+                    [latitude, longitude],
+                    {
+                        radius: radiusScale(value),
+                        // color: colorScale(feature.properties[currProperty]),
+                        color: 'black',
+                        fillColor: colorScale(value),
+                        fillOpacity: 0.5
+                    });
+                c.addTo(theMap);
+                c.bindTooltip('<h3>' + feature.id + '</h3>' + '<b>' + currProperty + ': </b>' + numberFormatter(feature.properties["dates"][dateStr][currProperty.toLowerCase()]) + '<br>' + properties.filter(d => d.code === currProperty)[0].desc + 
+                '<br>' + '<b>' + 'Population' + ': </b>' + numberFormatter(feature.properties["approx_population"]));
+                circles.push(c);
+            });
+        }
+
+        function fetchData(dateStr) {
+            var url = 'https://xyz.api.here.com/hub/spaces/' + spaceID + '/search?access_token=' + accessToken + '&selection=p.current_status_recovered,p.current_status_confirmed,p.current_status_deaths,p.population_confirmed_ratio,p.approx_population,p.dates.' + dateStr;
+            d3.json(url).then(function(data) {
+                theData = data;
+                renderCircles(dateStr);
+            });
+        }
+
+        calendar.setDate(initDate);
+        fetchData(initDate);
+        renderProperties(initDate);
+    </script>
+  </body>
+</html>
