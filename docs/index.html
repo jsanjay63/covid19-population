@@ -147,7 +147,7 @@
         var numberFormatter = d3.format(",");
         var currentDate = new Date();
         var month = currentDate.getMonth();
-        var day = currentDate.getDate()-2;
+        var day = currentDate.getDate()-1;
         var year = currentDate.getFullYear();
         var today = new Date(year, month, day);
         var calendar = flatpickr("#datepicker", {
