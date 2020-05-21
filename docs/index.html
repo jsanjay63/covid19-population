@@ -244,6 +244,8 @@
                 if(value < 1) {
                     if(currProperty.toLowerCase().includes("population")) {
                         value = value * Math.pow(10, 8)
+                    } else if(currProperty.toLowerCase() == ("deaths_confirmed_ratio")) {
+                        value = value * Math.pow(10, 6)
                     } else {
                         value = value * Math.pow(10, 5)
                     }
